@@ -1,92 +1,3 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase, configured } from './supabase';
-
-const DEST = { lat: 12.9217333, lng: 77.5809304 };
-const MAPS_URL = 'https://www.google.com/maps/dir/?api=1&destination=12.9217333%2C77.5809304';
-const statusLabel = { idle: '👀 Not decided', coming: '🏃 Coming', there: '☕ At CNTN', home: '🏠 Going home' };
-
-export default function LiveApp() {
-  const [user, setUser] = useState(null);
-  const [member, setMember] = useState(null);
-  const [members, setMembers] = useState([]);
-  const [statuses, setStatuses] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [eta, setEta] = useState(10);
-  const [msg, setMsg] = useState('Connecting to your private gang…');
-  const [busy, setBusy] = useState(false);
-  const [position, setPosition] = useState(null);
-  const [sharing, setSharing] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushReady, setPushReady] = useState(false);
-  const [pushSupported, setPushSupported] = useState(false);
-
-
-  const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
-
-  useEffect(() => {
-    const supported = typeof window !== 'undefined' && 'serviceWorker' in navigator &&
-      'PushManager' in window && 'Notification' in window;
-    setPushSupported(supported);
-    if (!supported) return;
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setPushReady(Boolean(sub)))
-      .catch((err) => setMsg(`Push setup: ${err.message}`));
-  }, []);
-
-  function base64UrlToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = window.atob(base64);
-    return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
-  }
-
-  async function enableNotifications() {
-    if (!member || !user || !supabase) return;
-    if (!pushSupported) {
-      setMsg('This browser does not support web push. Try a current Chrome/Edge browser on Android, or install CNTN on the iPhone Home Screen first.');
-      return;
-    }
-    if (!vapidPublicKey) {
-      setMsg('Push is not configured on this build yet: add VITE_VAPID_PUBLIC_KEY and rebuild.');
-      return;
-    }
-    setPushBusy(true);
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') throw new Error('Notification permission was not granted on this device.');
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToUint8Array(vapidPublicKey)
-        });
-      }
-      const { error } = await supabase.from('push_subscriptions').upsert({
-        member_id: user.id,
-        group_id: member.group_id,
-        endpoint: subscription.endpoint,
-        subscription: subscription.toJSON(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'endpoint' });
-      if (error) throw error;
-      setPushReady(true);
-      setMsg('🔔 Notifications enabled on this device. Ask each gang member to enable them on their own phone too.');
-    } catch (err) {
-      setMsg(`Could not enable notifications: ${err?.message || String(err)}`);
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
-  const refresh = useCallback(async (userId = user?.id) => {
-    if (!supabase || !userId) return;
-    const { data: memberRows, error: memberError } = await supabase
-      .from('members').select('id,group_id,display_name,created_at').order('created_at', { ascending: true });
-    if (memberError) { setMsg(`Members: ${memberError.message}`); return; }
     const mine = (memberRows || []).find((m) => m.id === userId) || null;
     setMember(mine);
     setMembers(memberRows || []);
@@ -200,7 +111,7 @@ export default function LiveApp() {
         <button className="location-button" onClick={enableNotifications} disabled={pushBusy || pushReady || !member}>
           {pushBusy ? 'ENABLING…' : pushReady ? '✓ NOTIFICATIONS ENABLED' : '🔔 ENABLE NOTIFICATIONS'}
         </button>
-        {!pushSupported && <p style={{ color: '#ffbd78', fontSize: 11 }}>Push is supported only in compatible browsers. On iPhone, add CNTN to the Home Screen first.</p>}
+        {!pushSupported && <p style={{ color: '#ffbd78', fontSize: 11 }}>{Capacitor.isNativePlatform() ? 'This APK needs the native notification update. Install the latest CNTN APK to enable Android push alerts.' : 'Push is supported only in compatible browsers. On iPhone, add CNTN to the Home Screen first.'}</p>}
       </section>
       <section className="section"><div className="section-heading"><div><span className="section-kicker">THE USUAL SUSPECTS</span><h3>Gang status</h3></div></div><div className="people-list">{members.map((m, i) => { const s = statuses.find((x) => x.member_id === m.id); return <article className="person-row" key={m.id}><div className={`avatar avatar-${i % 4}`}>{m.display_name?.[0]?.toUpperCase() || '?'}</div><div className="person-main"><div className="person-name">{m.display_name}{m.id === user?.id ? ' (you)' : ''}</div><div className="person-note">{s?.updated_at ? 'Updated ' + new Date(s.updated_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : 'No status yet'}</div></div><div className="person-right"><span className={'status-chip ' + (s?.status || 'idle')}>{statusLabel[s?.status || 'idle']}</span>{s?.status === 'coming' && <small>~{s.eta_minutes} min (self-reported)</small>}</div></article>; })}</div><button className="assemble-button" disabled={busy} onClick={assemble}>📣 LET'S ASSEMBLE</button></section>
       <section className="night-card"><div className="moon">🌙</div><div className="night-copy"><span className="section-kicker">11 PM CHECK-IN</span><h3>Bro… still at CNTN?</h3><p>Push is available after setup; the 11 PM automatic check-in is a separate feature and is not configured yet.</p></div></section>
