@@ -1,0 +1,12 @@
+{
+  "appId": "com.cntn.gang",
+  "appName": "CNTN",
+  "webDir": "dist",
+  "server": {
+    "url": "https://cntn-gang-app.sanjeevjjp.workers.dev",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
