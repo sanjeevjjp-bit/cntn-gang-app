@@ -4,9 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'capacitor.config.json'
-      - 'package.json'
-      - '.github/workflows/build-android-apk.yml
+      -.github/workflows/build-android-apk.yml
     branches: [main]
 
 permissions:
