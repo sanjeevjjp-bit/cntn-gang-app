@@ -29,7 +29,7 @@ jobs:
         run: npx cap add android
       - name: Sync Capacitor
         run: npx cap sync android
-              - name: Generate CNTN launcher icons
+        name: Generate CNTN launcher icons
         run: |
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
