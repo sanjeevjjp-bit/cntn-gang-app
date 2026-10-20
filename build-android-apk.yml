@@ -1,4 +1,3 @@
-```yaml
 name: Build CNTN Android APK
 
 on:
