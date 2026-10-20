@@ -29,6 +29,27 @@ jobs:
         run: npx cap add android
       - name: Sync Capacitor
         run: npx cap sync android
+              - name: Generate CNTN launcher icons
+        run: |
+          npm install --no-save sharp
+          node --input-type=module -e "
+          import sharp from 'sharp';
+          import fs from 'node:fs';
+          const input = fs.readFileSync('cntn-icon.png');
+          const sizes = [
+            ['mdpi', 48],
+            ['hdpi', 72],
+            ['xhdpi', 96],
+            ['xxhdpi', 144],
+            ['xxxhdpi', 192]
+          ];
+          for (const [density, size] of sizes) {
+            const dir = \`android/app/src/main/res/mipmap-\${density}\`;
+            fs.mkdirSync(dir, { recursive: true });
+            await sharp(input).resize(size, size).png().toFile(\`\${dir}/ic_launcher.png\`);
+            await sharp(input).resize(size, size).png().toFile(\`\${dir}/ic_launcher_round.png\`);
+          }
+          "
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
