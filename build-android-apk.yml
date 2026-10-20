@@ -1,9 +1,11 @@
+```yaml
 name: Build CNTN Android APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'package.json'
@@ -40,46 +42,31 @@ jobs:
         run: npx cap add android
 
       - name: Configure Firebase
+        shell: bash
         run: |
+          set -e
           test -f google-services.json
           cp google-services.json android/app/google-services.json
 
-          python3 <<'PY'
+          python3 -c "
           from pathlib import Path
-
-          root = Path("android/build.gradle")
-          app = Path("android/app/build.gradle")
-
+          root = Path('android/build.gradle')
+          app = Path('android/app/build.gradle')
           if not root.exists() or not app.exists():
-              raise SystemExit(
-                  "Expected Gradle files were not found. Check the generated Android project."
-              )
-
-          root_text = root.read_text()
-          plugin_line = "classpath 'com.google.gms:google-services:4.4.2'"
-
-          if plugin_line not in root_text:
-              marker = "dependencies {"
-              if marker not in root_text:
-                  raise SystemExit(
-                      "Could not find the root Gradle dependencies block. "
-                      "Firebase Gradle setup needs adjustment."
-                  )
-              root_text = root_text.replace(
-                  marker,
-                  marker + "\n        " + plugin_line,
-                  1
-              )
-              root.write_text(root_text)
-
-          app_text = app.read_text()
-          apply_line = "apply plugin: 'com.google.gms.google-services'"
-
-          if apply_line not in app_text:
-              app.write_text(app_text.rstrip() + "\n\n" + apply_line + "\n")
-
-          print("Firebase configuration added.")
-          PY
+              raise SystemExit('Expected Gradle files not found')
+          text = root.read_text()
+          plugin = \"classpath 'com.google.gms:google-services:4.4.2'\"
+          if plugin not in text:
+              marker = 'dependencies {'
+              if marker not in text:
+                  raise SystemExit('Root Gradle dependencies block not found')
+              root.write_text(text.replace(marker, marker + '\n        ' + plugin, 1))
+          text = app.read_text()
+          apply = \"apply plugin: 'com.google.gms.google-services'\"
+          if apply not in text:
+              app.write_text(text.rstrip() + '\n\n' + apply + '\n')
+          print('Firebase configuration added')
+          "
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -102,3 +89,4 @@ jobs:
           name: CNTN-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+```
