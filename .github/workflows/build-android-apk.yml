@@ -29,21 +29,16 @@ jobs:
         run: npx cap add android
       - name: Sync Capacitor
         run: npx cap sync android
-
-      - name: Generate CNTN launcher icons
+              - name: Generate CNTN launcher icons
         run: |
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          npx --yes sharp-cli -i cntn-icon.png resize 48 48 -o android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          npx --yes sharp-cli -i cntn-icon.png resize 72 72 -o android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          npx --yes sharp-cli -i cntn-icon.png resize 96 96 -o android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          npx --yes sharp-cli -i cntn-icon.png resize 144 144 -o android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          npx --yes sharp-cli -i cntn-icon.png resize 192 192 -o android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          for item in "mdpi 48" "hdpi 72" "xhdpi 96" "xxhdpi 144" "xxxhdpi 192"; do
+            set -- $item
+            density=$1
+            size=$2
+            dir="android/app/src/main/res/mipmap-$density"
+            mkdir -p "$dir"
+            convert cntn-icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+            cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+          done
