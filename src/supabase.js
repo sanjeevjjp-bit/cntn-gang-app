@@ -54,3 +54,4 @@ export function subscribeToGang(groupId, onChange) {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements', filter: `group_id=eq.${groupId}` }, onChange)
     .subscribe();
 }
+// CNTN build refresh
