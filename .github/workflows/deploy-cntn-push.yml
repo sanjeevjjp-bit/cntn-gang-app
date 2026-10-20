@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - 'supabase/functions/send-assemble-push/**'
-      - '.github/workflows/deploy-cntn-push.yml'
+      - .github/workflows/build-android-apk.yml
     branches:
       - main
 
