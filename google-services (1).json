@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "608527089490",
+    "project_id": "cntn-gang-app",
+    "storage_bucket": "cntn-gang-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608527089490:android:f39d3de8d641f11745448b",
+        "android_client_info": {
+          "package_name": "com.cntn.gang"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6Y9-Yza_7-JIbVbPX4HwvoAaTPXL4CEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
