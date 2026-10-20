@@ -1,0 +1,33 @@
+
+name: Deploy CNTN Push Function
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'supabase/functions/send-assemble-push/**'
+      - '.github/workflows/deploy-cntn-push.yml'
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: beqzttbxkqqmabdzfruf
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy notification function
+        run: supabase functions deploy send-assemble-push --project-ref "$SUPABASE_PROJECT_ID" --use-api
