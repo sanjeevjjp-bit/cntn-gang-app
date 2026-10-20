@@ -83,18 +83,15 @@ export default function LiveApp() {
           }
         });
 
-        const errorListener = await PushNotifications.addListener('registrationError', (err) => {
-          rejectRegistration(new Error(err?.error || 'Firebase registration failed.'));
-        });
-
-        try {
-          let permission = await PushNotifications.checkPermissions();
-          if (permission.receive !== 'granted') {
-            permission = await PushNotifications.requestPermissions();
-          }
-          if (permission.receive !== 'granted') {
-            throw new Error('Notification permission was not granted on this device.');
-          }
+        const errorListener = await PushNotifications.addListener(
+  'registrationError',
+  (err) => {
+    console.error('CNTN FCM REGISTRATION ERROR:', JSON.stringify(err));
+    rejectRegistration(
+      new Error(JSON.stringify(err))
+    );
+  }
+);
 
           if (Capacitor.getPlatform() === 'android') {
             await PushNotifications.createChannel({
