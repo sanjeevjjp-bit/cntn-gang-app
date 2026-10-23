@@ -7,6 +7,10 @@ const DEST = { lat: 12.9217333, lng: 77.5809304 };
 const MAPS_URL = 'https://www.google.com/maps/dir/?api=1&destination=12.9217333%2C77.5809304';
 // Latest signed APK, published by the "Build CNTN Android APK" GitHub Action.
 const APK_URL = 'https://github.com/sanjeevjjp-bit/cntn-gang-app/releases/latest/download/CNTN.apk';
+// Which status buttons also send a push notification to the rest of the gang.
+// Options: 'coming', 'there', 'home', 'idle'. Remove one to make it silent.
+// (The function only supports 'coming' and 'there' unless extended.)
+const NOTIFY_STATUSES = ['coming', 'there'];
 const statusLabel = { idle: '👀 Not decided', coming: '🏃 Coming', there: '☕ At CNTN', home: '🏠 Going home' };
 
 export default function LiveApp() {
@@ -250,6 +254,15 @@ export default function LiveApp() {
       const message = nextStatus === 'coming' ? `${member.display_name} is coming ☕ (~${eta} min)` : nextStatus === 'there' ? `${member.display_name} reached CNTN ☕` : nextStatus === 'home' ? `${member.display_name} is going home 🏠` : `${member.display_name} is undecided 👀`;
       const { error: announcementError } = await supabase.from('announcements').insert({ group_id: member.group_id, member_id: user.id, kind: 'status', message });
       setMsg(announcementError ? `Status saved; activity message failed: ${announcementError.message}` : `Status updated: ${statusLabel[nextStatus]}`);
+      // Tell the rest of the gang by push (only for the statuses in NOTIFY_STATUSES).
+      if (NOTIFY_STATUSES.includes(nextStatus)) {
+        supabase.functions.invoke('send-assemble-push', { body: { kind: nextStatus, eta: Number(eta) } })
+          .then(({ data, error: pushError }) => {
+            if (pushError) setMsg(`Status saved, but the notification failed: ${pushError.message}`);
+            else if (data?.totalSent === 0) setMsg(`Status updated: ${statusLabel[nextStatus]} (nobody else has notifications enabled yet)`);
+          })
+          .catch(() => {});
+      }
       await refresh(user.id);
     }
     setBusy(false);
