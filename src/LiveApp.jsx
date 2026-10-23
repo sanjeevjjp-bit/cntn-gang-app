@@ -5,6 +5,8 @@ import { PushNotifications } from '@capacitor/push-notifications';
 
 const DEST = { lat: 12.9217333, lng: 77.5809304 };
 const MAPS_URL = 'https://www.google.com/maps/dir/?api=1&destination=12.9217333%2C77.5809304';
+// Latest signed APK, published by the "Build CNTN Android APK" GitHub Action.
+const APK_URL = 'https://github.com/sanjeevjjp-bit/cntn-gang-app/releases/latest/download/CNTN.apk';
 const statusLabel = { idle: '👀 Not decided', coming: '🏃 Coming', there: '☕ At CNTN', home: '🏠 Going home' };
 
 export default function LiveApp() {
@@ -23,13 +25,17 @@ export default function LiveApp() {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushReady, setPushReady] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
-
+  const [updateNeeded, setUpdateNeeded] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      setPushSupported(Capacitor.isPluginAvailable('PushNotifications'));
+      const hasNativePush = Capacitor.isPluginAvailable('PushNotifications');
+      setPushSupported(hasNativePush);
+      // Old APKs were built without the native push plugin: show the update popup.
+      if (!hasNativePush) setUpdateNeeded(true);
       return;
     }
     const supported = typeof window !== 'undefined' && 'serviceWorker' in navigator &&
@@ -40,6 +46,17 @@ export default function LiveApp() {
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setPushReady(Boolean(sub)))
       .catch((err) => setMsg(`Push setup: ${err.message}`));
+  }, []);
+
+  // Show a message when a push arrives while the app is open (Android hides it otherwise).
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('PushNotifications')) return;
+    let handle;
+    let cancelled = false;
+    PushNotifications.addListener('pushNotificationReceived', (n) => {
+      setMsg(`🔔 ${n.title || 'CNTN'}${n.body ? ' — ' + n.body : ''}`);
+    }).then((h) => { if (cancelled) h.remove(); else handle = h; }).catch(() => {});
+    return () => { cancelled = true; handle?.remove(); };
   }, []);
 
   function base64UrlToUint8Array(base64String) {
@@ -55,7 +72,18 @@ export default function LiveApp() {
     try {
       if (Capacitor.isNativePlatform()) {
         if (!Capacitor.isPluginAvailable('PushNotifications')) {
-          throw new Error('This APK does not include native push support. Install the newly built CNTN APK first.');
+          setUpdateNeeded(true);
+          setUpdateDismissed(false);
+          throw new Error('This app version cannot receive notifications. Please install the new CNTN app.');
+        }
+
+        // Android 13+ needs the user to allow notifications before registering.
+        let permission = await PushNotifications.checkPermissions();
+        if (permission.receive === 'prompt' || permission.receive === 'prompt-with-rationale') {
+          permission = await PushNotifications.requestPermissions();
+        }
+        if (permission.receive !== 'granted') {
+          throw new Error('Notifications are blocked. Open phone Settings → Apps → CNTN → Notifications and allow them, then try again.');
         }
 
         let resolveRegistration;
@@ -83,16 +111,12 @@ export default function LiveApp() {
           }
         });
 
-        const errorListener = await PushNotifications.addListener(
-  'registrationError',
-  (err) => {
-    console.error('CNTN FCM REGISTRATION ERROR:', JSON.stringify(err));
-    rejectRegistration(
-      new Error(JSON.stringify(err))
-    );
-  }
-);
+        const errorListener = await PushNotifications.addListener('registrationError', (err) => {
+          console.error('CNTN FCM REGISTRATION ERROR:', JSON.stringify(err));
+          rejectRegistration(new Error(JSON.stringify(err)));
+        });
 
+        try {
           if (Capacitor.getPlatform() === 'android') {
             await PushNotifications.createChannel({
               id: 'cntn_alerts',
@@ -257,6 +281,21 @@ export default function LiveApp() {
   const distance = position ? Math.round(6371 * 2 * Math.asin(Math.sqrt(Math.sin((DEST.lat - position.lat) * Math.PI / 360) ** 2 + Math.cos(position.lat * Math.PI / 180) * Math.cos(DEST.lat * Math.PI / 180) * Math.sin((DEST.lng - position.lng) * Math.PI / 360) ** 2)) * 10) / 10 : null;
 
   return <main className="app-shell">
+    {updateNeeded && !updateDismissed && <div role="dialog" aria-modal="true" aria-label="App update required" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#241d16', border: '1px solid #6b5238', borderRadius: 20, padding: 22, maxWidth: 380, width: '100%', color: '#f5ece0', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+        <div style={{ fontSize: 36, textAlign: 'center' }}>🔔</div>
+        <h3 style={{ margin: '8px 0', textAlign: 'center', fontSize: 20 }}>Update required ☕</h3>
+        <p style={{ fontSize: 13, lineHeight: 1.5, color: '#d8cbb9', margin: '0 0 10px' }}>This version of CNTN cannot receive chai-call notifications. Please install the new app once.</p>
+        <ol style={{ fontSize: 12.5, lineHeight: 1.6, color: '#d8cbb9', paddingLeft: 18, margin: '0 0 14px' }}>
+          <li>Tap <strong>Download new app</strong> below.</li>
+          <li>Open the downloaded file and tap Install. If Android asks, allow "install unknown apps".</li>
+          <li>If it says "App not installed", first uninstall the old CNTN app, then install again.</li>
+          <li>Open the new app, join with your nickname + gang code, and tap <strong>Enable notifications</strong>.</li>
+        </ol>
+        <a href={APK_URL} target="_blank" rel="noreferrer" className="assemble-button" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>⬇️ DOWNLOAD NEW APP</a>
+        <button type="button" className="location-button" style={{ marginTop: 10 }} onClick={() => setUpdateDismissed(true)}>Later</button>
+      </div>
+    </div>}
     <header className="topbar"><div className="brand-mark">☕</div><div className="brand-copy"><div className="eyebrow">PRIVATE GANG APP <span className="live-dot" /></div><h1>CNTN ☕</h1><p>Coffee Naa Tea Naa · Chai Attendance</p></div><button className="icon-button" aria-label="Notifications" onClick={enableNotifications}>🔔</button></header>
     <section className="hero-card"><div className="hero-stamp">🔥 DAILY ADDICTION</div><h2>Your gang.<br/><span>Your adda.</span></h2><p>Attendance is optional. Excuses are mandatory.</p><div className="hero-stats"><div><strong>{counts.there}</strong><span>at CNTN</span></div><div className="stat-divider"/><div><strong>{counts.coming}</strong><span>en route</span></div><div className="stat-divider"/><div><strong>{members.length}</strong><span>in the gang</span></div></div></section>
     {!member ? <section className="section"><span className="section-kicker">SECRET CHAI SOCIETY</span><h3>Join the gang 🔐</h3><p style={{ color: '#b9ad9e', fontSize: 12 }}>Nickname + private invite code. No email needed.</p><form onSubmit={join}><input className="name-input" required minLength="2" maxLength="32" placeholder="Your nickname" value={name} onChange={(e) => setName(e.target.value)} /><input className="name-input" style={{ marginTop: 10 }} required minLength="12" maxLength="128" placeholder="Private invite code" value={code} onChange={(e) => setCode(e.target.value)} /><button className="assemble-button" disabled={busy}>{busy ? 'CONNECTING…' : 'JOIN THE CHAI COUNCIL ☕'}</button></form></section> : <>
