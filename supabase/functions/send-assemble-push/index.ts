@@ -166,25 +166,52 @@ Deno.serve(async (req) => {
 
   webpush.setVapidDetails(subject, publicKey, privateKey);
 
-  const message = `${member.display_name} says ASSEMBLE! ☕`;
-  const { error: eventError } = await admin.from("announcements").insert({
-    group_id: member.group_id,
-    member_id: member.id,
-    kind: "assemble",
-    message,
-  });
+  // What kind of alert is this? "assemble" (default), "coming" or "there".
+  const requestBody = await req.json().catch(() => ({}));
+  const kind = ["assemble", "coming", "there"].includes(requestBody?.kind)
+    ? (requestBody.kind as "assemble" | "coming" | "there")
+    : "assemble";
+  const etaMinutes = Math.min(
+    Math.max(Math.round(Number(requestBody?.eta)) || 0, 0),
+    180,
+  );
 
-  if (eventError) {
-    return json({
-      error: `Could not post assemble event: ${eventError.message}`,
-    }, 500);
+  let notifTitle: string;
+  let notifBody: string;
+  if (kind === "coming") {
+    notifTitle = `🏃 ${member.display_name} is on the way`;
+    notifBody = etaMinutes
+      ? `Reaching CNTN in about ${etaMinutes} min ☕`
+      : "Heading to CNTN ☕";
+  } else if (kind === "there") {
+    notifTitle = `☕ ${member.display_name} reached CNTN`;
+    notifBody = "Come join the adda!";
+  } else {
+    notifTitle = "☕ CHAI EMERGENCY!";
+    notifBody =
+      `${member.display_name} is calling the gang to CNTN. Assemble now!`;
+
+    // Only ASSEMBLE posts its own activity entry here. Status changes are
+    // already logged by the app itself.
+    const { error: eventError } = await admin.from("announcements").insert({
+      group_id: member.group_id,
+      member_id: member.id,
+      kind: "assemble",
+      message: `${member.display_name} says ASSEMBLE! ☕`,
+    });
+
+    if (eventError) {
+      return json({
+        error: `Could not post assemble event: ${eventError.message}`,
+      }, 500);
+    }
   }
 
   const payload = JSON.stringify({
-    title: "☕ CHAI EMERGENCY!",
-    body: `${member.display_name} is calling the gang to CNTN. Assemble now!`,
+    title: notifTitle,
+    body: notifBody,
     url: "/",
-    tag: `cntn-assemble-${Date.now()}`,
+    tag: `cntn-${kind}-${Date.now()}`,
   });
 
   // Existing browser subscribers.
@@ -261,12 +288,12 @@ Deno.serve(async (req) => {
                 message: {
                   token: device.token,
                   notification: {
-                    title: "☕ CHAI EMERGENCY!",
-                    body: `${member.display_name} is calling the gang to CNTN. Assemble now!`,
+                    title: notifTitle,
+                    body: notifBody,
                   },
                   data: {
                     url: "/",
-                    type: "assemble",
+                    type: kind,
                   },
                   android: {
                     priority: "HIGH",
