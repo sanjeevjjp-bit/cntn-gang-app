@@ -89,6 +89,10 @@ jobs:
               convert cntn-icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
               cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
             done
+
+            # Newer Android versions prefer Capacitor's default adaptive icon
+            # and would ignore the logo above. Remove it so the logo is used.
+            rm -rf android/app/src/main/res/mipmap-anydpi-v26
           fi
 
       - name: Allow notifications on Android 13+
