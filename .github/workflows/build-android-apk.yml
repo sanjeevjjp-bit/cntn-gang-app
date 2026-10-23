@@ -9,14 +9,14 @@ on:
       - '.github/workflows/build-android-apk.yml'
       - 'package.json'
       - 'package-lock.json'
-      - 'src/**'
-      - 'public/**'
       - 'capacitor.config.json'
       - 'google-services.json'
       - 'cntn-icon.png'
+# Note: the app loads the live website, so changes to src/ or public/ reach
+# phones by themselves. A new APK is only needed for native changes (this list).
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -91,6 +91,16 @@ jobs:
             done
           fi
 
+      - name: Allow notifications on Android 13+
+        shell: bash
+        run: |
+          set -e
+          manifest=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "android.permission.POST_NOTIFICATIONS" "$manifest"; then
+            sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$manifest"
+          fi
+          grep -q "android.permission.POST_NOTIFICATIONS" "$manifest"
+
       - name: Sync Capacitor
         run: npx cap sync android
 
@@ -100,7 +110,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build debug APK
+      # A permanent signing key means every future APK can be installed over
+      # the previous one without uninstalling. Without it, each build gets a
+      # random key and Android refuses to update the app.
+      - name: Use permanent signing key
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Add the ANDROID_KEYSTORE_BASE64 repository secret first (GitHub repo > Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+
+      - name: Build APK
         working-directory: android
         run: |
           chmod +x gradlew
@@ -112,3 +137,19 @@ jobs:
           name: CNTN-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Public download link used by the in-app "Update required" popup:
+      # https://github.com/<owner>/<repo>/releases/latest/download/CNTN.apk
+      - name: Publish APK download link
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk CNTN.apk
+          gh release delete apk-latest --repo "${{ github.repository }}" --yes --cleanup-tag || true
+          gh release create apk-latest CNTN.apk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "CNTN app (latest)" \
+            --notes "Latest CNTN Android app, built $(date -u +%F)." \
+            --latest
